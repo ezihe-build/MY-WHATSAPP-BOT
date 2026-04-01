@@ -20,7 +20,7 @@ const database = require('./utils/database');
 // Import command handlers
 const authHandler = require('./handlers/authHandler');
 const menuHandler = require('./handlers/menuHandler');
-const mediaHandler = require('./handlers/mediaHandler');
+//const mediaHandler = require('./handlers/mediaHandler');
 const aiHandler = require('./handlers/aiHandler');
 const adminHandler = require('./handlers/adminHandler');
 const downloadHandler = require('./handlers/downloadHandler');
@@ -212,7 +212,7 @@ function setupCommands() {
 function setupActions() {
   // Menu actions
   bot.action('menu_main', authMiddleware, menuHandler.mainMenuAction);
-  bot.action('menu_media', authMiddleware, menuHandler.mediaMenuAction);
+  //bot.action('menu_media', authMiddleware, menuHandler.mediaMenuAction);
   bot.action('menu_ai', authMiddleware, menuHandler.aiMenuAction);
   bot.action('menu_admin', authMiddleware, menuHandler.adminMenuAction);
   bot.action('menu_download', authMiddleware, menuHandler.downloadMenuAction);
