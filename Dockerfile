@@ -1,5 +1,5 @@
 # EZIHE SUPER BOT - Dockerfile
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Install dependencies for native modules
 RUN apk add --no-cache \
