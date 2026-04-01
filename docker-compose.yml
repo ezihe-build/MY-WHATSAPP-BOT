@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  ezihe-bot:
+    build: .
+    container_name: ezihe-super-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./downloads:/app/downloads
+      - ./assets:/app/assets
+    environment:
+      - NODE_ENV=production
+    networks:
+      - bot-network
+
+  # Optional: Add Redis for caching
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: ezihe-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - bot-network
+
+networks:
+  bot-network:
+    driver: bridge
+
+# volumes:
+#   redis-data:

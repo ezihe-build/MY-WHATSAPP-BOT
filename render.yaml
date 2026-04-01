@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ezihe-bot
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: TELEGRAM_BOT_TOKEN
+        value: 7937351643:AAHoKl_NrRL2WhCFnhIpzEONYiAt23Iw6DQ
+      - key: OWNER_ID
+        value: 8045084951
+      - key: PREFIX
+        value: .
+      - key: BOT_NAME
+        value: EZIHE-BOT
+      - key: OWNER_NUMBER
+        value: 09035659542
+    disk:
+      name: session
+      mountPath: /opt/render/project/src/session
+      sizeGB: 1
