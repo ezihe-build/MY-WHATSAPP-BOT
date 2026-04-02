@@ -11,6 +11,7 @@ const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
+const http = require('http');
 
 // Import configurations and utilities
 const config = require('./config/config');
@@ -63,6 +64,14 @@ ${chalk.cyan('╚═════════════════════
 async function initialize() {
   console.log(banner);
   logger.info('Starting EZIHE Super Bot...');
+
+  // --- RENDER KEEP-ALIVE SERVER ---
+  // This prevents Render from timing out and restarting the bot
+  http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot is running!');
+  }).listen(process.env.PORT || 10000);
+  logger.info('Keep-alive server started on port ' + (process.env.PORT || 10000));
 
   // Ensure directories exist
   await fs.ensureDir(config.paths.downloads);
@@ -135,16 +144,10 @@ function setupMiddleware() {
 
 // Setup commands
 function setupCommands() {
-  // Start command
+  // Start & Basic commands
   bot.command('start', authHandler.startCommand);
-
-  // Password command
   bot.command('password', authHandler.passwordCommand);
-
-  // Menu command
   bot.command('menu', authMiddleware, menuHandler.menuCommand);
-
-  // Help command
   bot.command('help', authMiddleware, menuHandler.helpCommand);
 
   // Admin commands
@@ -189,7 +192,7 @@ function setupCommands() {
   bot.command('addpremium', authMiddleware, adminHandler.addPremiumCommand);
   bot.command('removepremium', authMiddleware, adminHandler.removePremiumCommand);
 
-  // Handle text messages (for WhatsApp pairing AND link detection)
+  // Handle text messages (WhatsApp pairing & Link detection)
   bot.on('text', authMiddleware, async (ctx, next) => {
     const userId = ctx.from?.id;
     const userSession = global.userSessions.get(userId);
@@ -197,15 +200,11 @@ function setupCommands() {
     // FIX: Catch the phone number for WhatsApp pairing
     if (userSession && userSession.waitingFor === 'whatsapp_phone') {
       const phoneNumber = ctx.message.text;
-      // Clear the waiting state so it doesn't get stuck in a loop
       userSession.waitingFor = null;
-      // Send the number to the WhatsApp handler!
       return whatsappHandler.startPairing(ctx, phoneNumber);
     }
 
     const text = ctx.message.text;
-    
-    // Check for URLs
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const urls = text.match(urlRegex);
     
@@ -222,9 +221,7 @@ function setupCommands() {
 
 // Setup action handlers (button callbacks)
 function setupActions() {
-  // Menu actions
   bot.action('menu_main', authMiddleware, menuHandler.mainMenuAction);
-  //bot.action('menu_media', authMiddleware, menuHandler.mediaMenuAction);
   bot.action('menu_ai', authMiddleware, menuHandler.aiMenuAction);
   bot.action('menu_admin', authMiddleware, menuHandler.adminMenuAction);
   bot.action('menu_download', authMiddleware, menuHandler.downloadMenuAction);
@@ -233,16 +230,9 @@ function setupActions() {
   bot.action('menu_movie', authMiddleware, menuHandler.movieMenuAction);
   bot.action('menu_whatsapp', authMiddleware, menuHandler.whatsappMenuAction);
 
-  // Download quality selection
   bot.action(/quality_(.+)/, authMiddleware, downloadHandler.qualityAction);
-  
-  // Admin actions
   bot.action(/admin_(.+)/, authMiddleware, adminHandler.adminAction);
-  
-  // AI actions
   bot.action(/ai_(.+)/, authMiddleware, aiHandler.aiAction);
-
-  // Handle back buttons
   bot.action('back_main', authMiddleware, menuHandler.mainMenuAction);
 }
 
@@ -273,4 +263,4 @@ initialize().catch(err => {
 });
 
 module.exports = bot;
-  
+    
