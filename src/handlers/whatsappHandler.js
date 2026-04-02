@@ -30,14 +30,16 @@ async function startPairing(ctx, phoneNumber) {
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     const { version } = await fetchLatestBaileysVersion();
 
-        const sock = makeWASocket({
+            const sock = makeWASocket({
       version,
       auth: state,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
-      // This line makes WhatsApp think you are using a real MacBook
-      browser: ["Mac OS", "Chrome", "121.0.6167.85"] 
+      browser: ["Mac OS", "Chrome", "121.0.6167.85"],
+      // ADD THIS LINE BELOW:
+      connectTimeoutMs: 60000 
     });
+  
     
     if (!sock.authState.creds.registered) {
       // 5-second delay to allow socket to stabilize
