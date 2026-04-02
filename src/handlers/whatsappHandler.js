@@ -22,27 +22,55 @@ async function initialize() {
   logger.info('WhatsApp handler initialized');
 }
 
+/**
+ * Check Connection Status
+ */
 async function whatsappCommand(ctx) {
   const userId = ctx.from.id;
   const session = await database.get('SELECT * FROM whatsapp_sessions WHERE user_id = ? AND is_active = 1', [userId]);
 
   if (session) {
-    await ctx.reply(`📱 *WhatsApp Status*\n\n✅ Connected\n📞 Phone: ${session.phone_number}`, {
+    const statusMsg = `
+✨ *WHATSAPP CONNECTION* ✨
+━━━━━━━━━━━━━━━━━━━━
+✅ *Status:* Connected
+📞 *Phone:* \`${session.phone_number}\`
+📡 *Signal:* Active
+
+_Your bot is now synced with WhatsApp!_
+━━━━━━━━━━━━━━━━━━━━`;
+    
+    await ctx.reply(statusMsg, {
       parse_mode: 'Markdown',
       reply_markup: {
-        inline_keyboard: [[{ text: '❌ Disconnect', callback_data: 'wa_disconnect' }]]
+        inline_keyboard: [[{ text: '🔴 Disconnect Account', callback_data: 'wa_disconnect' }]]
       }
     });
   } else {
-    await ctx.reply(`📱 *WhatsApp Status*\n\n❌ Not Connected\n\nUse /pair to link your account.`, { parse_mode: 'Markdown' });
+    await ctx.reply(`❌ *WhatsApp Not Linked*\n\nPlease use /pair to start the connection process.`, { parse_mode: 'Markdown' });
   }
 }
 
+/**
+ * Request Phone Number
+ */
 async function pairCommand(ctx) {
   const userId = ctx.from.id;
-  await ctx.reply(`🔗 *WhatsApp Pairing*\n\nEnter your phone number with country code (e.g., 2349035659542).\n\n*Note:* Reply directly to this message.`, {
+  const pairMsg = `
+🔗 *WHATSAPP PAIRING* 🔗
+━━━━━━━━━━━━━━━━━━━━
+Please enter your phone number with country code.
+Example: \`2349035659542\`
+
+⚠️ *Note:* You must *REPLY* directly to this message.
+━━━━━━━━━━━━━━━━━━━━`;
+
+  await ctx.reply(pairMsg, {
     parse_mode: 'Markdown',
-    reply_markup: { force_reply: true }
+    reply_markup: { 
+      force_reply: true,
+      input_field_placeholder: '+234...'
+    }
   });
 
   if (global.userSessions.has(userId)) {
@@ -50,14 +78,23 @@ async function pairCommand(ctx) {
   }
 }
 
+/**
+ * Start the Pairing Process
+ */
 async function startPairing(ctx, phoneNumber) {
   const userId = ctx.from.id;
   const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-  const processingMsg = await ctx.reply('⏳ Requesting 8-digit Pairing Code...');
+  
+  const processingMsg = await ctx.reply('⏳ *Initializing Secure Connection...*', { parse_mode: 'Markdown' });
 
   try {
     const sessionDir = path.join(config.paths.data, 'whatsapp_sessions', `user_${userId}`);
+    
+    // --- CRITICAL FIX: Wipe old broken session data ---
+    await fs.emptyDir(sessionDir);
     await fs.ensureDir(sessionDir);
+    // -------------------------------------------------
+
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -66,61 +103,118 @@ async function startPairing(ctx, phoneNumber) {
       auth: state,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
-      // Browser must be set like this for pairing codes to work
-      browser: ["Ubuntu", "Chrome", "20.0.04"] 
+      // Using Chrome on Linux browser string for maximum compatibility
+      browser: ["EZIHE-BOT", "Chrome", "110.0.5481.177"] 
     });
 
+    // Request the Pairing Code
     if (!sock.authState.creds.registered) {
       setTimeout(async () => {
         try {
           let code = await sock.requestPairingCode(cleanNumber);
+          
+          // Split code into two parts for easier reading (e.g., K3GV-AQ3C)
+          const displayCode = code?.match(/.{1,4}/g)?.join('-') || code;
+
+          const codeMsg = `
+🔐 *PAIRING CODE GENERATED* 🔐
+━━━━━━━━━━━━━━━━━━━━
+Your 8-Digit Code is:
+👉 \`${displayCode}\` 👈
+
+*How to Link:*
+1️⃣ Open *WhatsApp* on your phone.
+2️⃣ Tap *Settings* > *Linked Devices*.
+3️⃣ Tap *Link a Device* > *Link with phone number instead*.
+4️⃣ Type the code shown above.
+
+⌛ _This code expires in 2 minutes!_
+━━━━━━━━━━━━━━━━━━━━`;
+
           await ctx.telegram.editMessageText(
             processingMsg.chat.id,
             processingMsg.message_id,
             null,
-            `✅ *WhatsApp Pairing Code*\n\nYour Code: \`${code}\`\n\n1. Open WhatsApp > Linked Devices\n2. Link with phone number\n3. Enter this code on your phone.`,
+            codeMsg,
             { parse_mode: 'Markdown' }
           );
         } catch (err) {
-          ctx.reply("❌ Error requesting code. Try again later.");
+          logger.error('Pairing Code Error:', err);
+          ctx.reply("❌ *Failed to generate code.*\nMake sure the phone number is correct and try again.");
         }
-      }, 3000);
+      }, 4000); // 4 second delay to ensure socket is ready
     }
 
+    // Save credentials when updated
     sock.ev.on('creds.update', saveCreds);
     
+    // Monitor Connection Status
     sock.ev.on('connection.update', async (update) => {
-      const { connection } = update;
+      const { connection, lastDisconnect } = update;
+      
       if (connection === 'open') {
-        await ctx.reply('🎉 WhatsApp Linked Successfully!');
+        const successMsg = `
+🎉 *SUCCESS!* 🎉
+━━━━━━━━━━━━━━━━━━━━
+Your WhatsApp account has been linked to *EZIHE SUPER BOT*.
+
+You can now use WhatsApp features directly from Telegram!
+━━━━━━━━━━━━━━━━━━━━`;
+        await ctx.reply(successMsg, { parse_mode: 'Markdown' });
+        
         await database.run(
           'INSERT OR REPLACE INTO whatsapp_sessions (user_id, phone_number, is_active) VALUES (?, ?, 1)',
           [userId, cleanNumber]
         );
       }
+
+      if (connection === 'close') {
+        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+        if (shouldReconnect) {
+          // Silent auto-reconnect if it wasn't a manual logout
+          startPairing(ctx, cleanNumber);
+        }
+      }
     });
 
     whatsappSessions.set(userId, { socket: sock });
+
   } catch (error) {
-    logger.error('WA Error:', error);
-    ctx.reply('❌ Connection failed.');
+    logger.error('WhatsApp Handler Error:', error);
+    ctx.reply('⚠️ *Connection Error:* Could not reach WhatsApp servers. Please try again later.');
   }
 }
 
 async function sendWhatsAppMessage(ctx, jid, message) {
   const session = whatsappSessions.get(ctx.from.id);
-  if (session) await session.socket.sendMessage(jid, { text: message });
+  if (session && session.socket) {
+    await session.socket.sendMessage(jid, { text: message });
+  }
 }
 
 async function disconnectWhatsApp(ctx) {
   const userId = ctx.from.id;
   const session = whatsappSessions.get(userId);
-  if (session?.socket) await session.socket.logout();
+  
+  if (session?.socket) {
+    await session.socket.logout();
+    whatsappSessions.delete(userId);
+  }
+  
   await database.run('UPDATE whatsapp_sessions SET is_active = 0 WHERE user_id = ?', [userId]);
-  ctx.reply('Disconnected.');
+  
+  const sessionDir = path.join(config.paths.data, 'whatsapp_sessions', `user_${userId}`);
+  await fs.remove(sessionDir).catch(() => {}); // Clean up files
+  
+  ctx.reply('✅ *WhatsApp Disconnected.* \nAll session data has been wiped.', { parse_mode: 'Markdown' });
 }
 
 module.exports = {
-  initialize, whatsappCommand, pairCommand, startPairing,
-  sendWhatsAppMessage, disconnectWhatsApp, whatsappSessions
+  initialize, 
+  whatsappCommand, 
+  pairCommand, 
+  startPairing,
+  sendWhatsAppMessage, 
+  disconnectWhatsApp, 
+  whatsappSessions
 };
