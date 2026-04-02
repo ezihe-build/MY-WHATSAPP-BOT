@@ -1,7 +1,7 @@
 # EZIHE SUPER BOT - Dockerfile
 FROM node:20-alpine
 
-# Added git to the apk add list
+# Install tools needed for the bot
 RUN apk add --no-cache \
     python3 \
     make \
@@ -14,8 +14,8 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# This will now work because 'git' is available to download the Xeon socket
-RUN npm install --production
+# ADDED --legacy-peer-deps: This stops the red "ERESOLVE" errors
+RUN npm install --production --legacy-peer-deps
 
 COPY . .
 
