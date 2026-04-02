@@ -28,4 +28,4 @@ RUN mkdir -p data downloads logs temp assets
 EXPOSE 10000
 
 # Start the bot
-CMD ["node", "index.js"]
+CMD ["node", "start"]
