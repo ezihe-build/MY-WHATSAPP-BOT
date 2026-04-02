@@ -15,8 +15,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# CHANGE HERE: Use 'install' instead of 'ci' to fix the EUSAGE error
+RUN npm install --production
 
 # Copy app source
 COPY . .
@@ -24,12 +24,8 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p data downloads logs temp assets
 
-# Expose port (for webhook mode)
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "console.log('healthy')" || exit 1
+# Expose port
+EXPOSE 10000
 
 # Start the bot
-CMD ["npm", "start"]
+CMD ["node", "index.js"]
