@@ -1,74 +1,100 @@
-#!/usr/bin/env node
-/**
- * EZIHE SUPER BOT - Main Entry Point
- */
 require('dotenv').config();
+const { 
+  default: makeWASocket, 
+  useMultiFileAuthState, 
+  fetchLatestBaileysVersion, 
+  DisconnectReason 
+} = require('@whiskeysockets/baileys');
 const { Telegraf } = require('telegraf');
-const express = require('express');
-const fs = require('fs-extra');
+const pino = require('pino');
 const path = require('path');
-const http = require('http');
+const fs = require('fs-extra');
+const express = require('express');
 
-// Import your modules from the src folder
-const config = require('./src/config/config');
-const database = require('./src/utils/database');
-const whatsappHandler = require('./src/handlers/whatsappHandler');
-const authHandler = require('./src/handlers/authHandler');
-const authMiddleware = require('./src/middleware/authMiddleware');
-
+// --- 1. SETTINGS & CONFIG ---
+const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
-const bot = new Telegraf(config.botToken);
+const PORT = process.env.PORT || 10000;
 
-// GLOBAL SESSIONS
-global.userSessions = new Map();
+// --- 2. KEEP-ALIVE SERVER (For Render) ---
+app.get('/', (req, res) => res.send('Ezihe Super Bot is Running!'));
+app.listen(PORT, () => console.log(`✅ Keep-alive server on port ${PORT}`));
 
-async function initialize() {
-  // 1. RENDER HEALTH CHECK (Fixes "No open ports detected")
-  app.get('/', (req, res) => res.send('Bot is running!'));
-  const PORT = process.env.PORT || 10000;
-  app.listen(PORT, () => {
-    console.log(`Keep-alive server listening on port ${PORT}`);
-  });
+// --- 3. WHATSAPP PAIRING HANDLER ---
+async function startPairing(ctx, phoneNumber) {
+  const userId = ctx.from.id;
+  const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+  const statusMsg = await ctx.reply('⏳ *Connecting to WhatsApp Servers...*');
 
-  // 2. Ensure Folders exist
-  await fs.ensureDir(path.join(process.cwd(), 'data/whatsapp_sessions'));
+  try {
+    // Setup unique session directory
+    const sessionDir = path.join(process.cwd(), 'data', 'whatsapp_sessions', `user_${userId}`);
+    await fs.ensureDir(sessionDir);
+    await fs.emptyDir(sessionDir); // Ensure fresh start
 
-  // 3. Initialize Database
-  await database.initialize();
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-  // 4. Session Middleware
-  bot.use((ctx, next) => {
-    const userId = ctx.from?.id;
-    if (userId && !global.userSessions.has(userId)) {
-      global.userSessions.set(userId, { authenticated: false, waitingFor: null });
+    // FETCH LATEST VERSION FIX
+    const { version } = await fetchLatestBaileysVersion();
+    console.log(`[WA] Using Version: ${version.join('.')}`);
+
+    const sock = makeWASocket({
+      version,
+      auth: state,
+      printQRInTerminal: false,
+      logger: pino({ level: 'silent' }),
+      browser: ["Ubuntu", "Chrome", "20.0.04"],
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 0,
+    });
+
+    if (!sock.authState.creds.registered) {
+      setTimeout(async () => {
+        try {
+          const code = await sock.requestPairingCode(cleanNumber);
+          const displayCode = code?.match(/.{1,4}/g)?.join('-') || code;
+          
+          await ctx.telegram.editMessageText(
+            ctx.chat.id, 
+            statusMsg.message_id, 
+            null, 
+            `🔐 *YOUR PAIRING CODE:* \n\n\`${displayCode}\`\n\n1. Open WhatsApp > Linked Devices\n2. Link with phone number\n3. Enter this code.`, 
+            { parse_mode: 'Markdown' }
+          );
+        } catch (err) {
+          ctx.reply("❌ WhatsApp rejected the request. Wait 2 mins.");
+        }
+      }, 5000);
     }
-    return next();
-  });
 
-  // 5. Bot Commands
-  bot.command('start', authHandler.startCommand);
-  bot.command('pair', authMiddleware, whatsappHandler.pairCommand);
+    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('connection.update', (update) => {
+      if (update.connection === 'open') {
+        ctx.reply('🎉 *WhatsApp Linked Successfully!*');
+      }
+    });
 
-  // 6. Handling Phone Number Input for WhatsApp
-  bot.on('text', authMiddleware, async (ctx, next) => {
-    const session = global.userSessions.get(ctx.from?.id);
-    if (session?.waitingFor === 'whatsapp_phone') {
-      session.waitingFor = null;
-      return whatsappHandler.startPairing(ctx, ctx.message.text);
-    }
-    return next();
-  });
-
-  // 7. CLEAR WEBHOOKS (Fixes "409: Conflict")
-  await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-  
-  // 8. Launch Bot
-  bot.launch();
-  console.log('✅ Bot started successfully from Root!');
+  } catch (error) {
+    console.error(error);
+    ctx.reply('⚠️ Pairing failed.');
+  }
 }
 
-initialize().catch(err => console.error('Start Error:', err));
+// --- 4. TELEGRAM COMMANDS ---
+bot.start((ctx) => ctx.reply('Welcome! Use /pair 234xxxxxxxx to link WhatsApp.'));
 
-// Graceful shutdown
+bot.command('pair', async (ctx) => {
+  const args = ctx.message.text.split(' ');
+  if (args.length < 2) return ctx.reply('Usage: /pair 234xxxxxxxx');
+  await startPairing(ctx, args[1]);
+});
+
+// Placeholder for your other commands (/ai, /menu, etc.)
+bot.command('ping', (ctx) => ctx.reply('Pong! Bot is alive.'));
+
+// --- 5. LAUNCH ---
+bot.launch().then(() => console.log('🚀 Telegram Bot Started!'));
+
+// Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
