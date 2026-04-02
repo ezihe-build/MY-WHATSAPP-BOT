@@ -22,7 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "telegraf": "^4.16.3",
-    "@whiskeysockets/baileys": "^6.7.5",
+    "@whiskeysockets/baileys": "github:DGXeon13/dgxeon-soket"
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
