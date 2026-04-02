@@ -189,8 +189,20 @@ function setupCommands() {
   bot.command('addpremium', authMiddleware, adminHandler.addPremiumCommand);
   bot.command('removepremium', authMiddleware, adminHandler.removePremiumCommand);
 
-  // Handle text messages (for link detection)
+  // Handle text messages (for WhatsApp pairing AND link detection)
   bot.on('text', authMiddleware, async (ctx, next) => {
+    const userId = ctx.from?.id;
+    const userSession = global.userSessions.get(userId);
+
+    // FIX: Catch the phone number for WhatsApp pairing
+    if (userSession && userSession.waitingFor === 'whatsapp_phone') {
+      const phoneNumber = ctx.message.text;
+      // Clear the waiting state so it doesn't get stuck in a loop
+      userSession.waitingFor = null;
+      // Send the number to the WhatsApp handler!
+      return whatsappHandler.startPairing(ctx, phoneNumber);
+    }
+
     const text = ctx.message.text;
     
     // Check for URLs
@@ -261,3 +273,4 @@ initialize().catch(err => {
 });
 
 module.exports = bot;
+  
