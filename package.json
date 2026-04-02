@@ -1,28 +1,14 @@
 {
   "name": "ezihe-super-bot",
   "version": "2.0.0",
-  "description": "All-in-One Super Bot with AI, Media Downloads, Admin Controls & WhatsApp Integration",
+  "description": "All-in-One Super Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "pm2:start": "pm2 start ecosystem.config.js",
-    "pm2:stop": "pm2 stop ezihe-bot",
-    "pm2:restart": "pm2 restart ezihe-bot",
-    "pm2:logs": "pm2 logs ezihe-bot"
+    "start": "node index.js"
   },
-  "keywords": [
-    "telegram-bot",
-    "whatsapp-bot",
-    "ai",
-    "media-downloader",
-    "admin-panel"
-  ],
-  "author": "Ezihe",
-  "license": "MIT",
   "dependencies": {
     "telegraf": "^4.16.3",
-    "@whiskeysockets/baileys": "github:DGXeon13/dgxeon-soket"
+    "@whiskeysockets/baileys": "github:DGXeon13/dgxeon-soket",
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
@@ -41,9 +27,6 @@
     "sharp": "^0.33.4",
     "uuid": "^10.0.0",
     "chalk": "^4.1.2"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.4"
   },
   "engines": {
     "node": ">=18.0.0"
